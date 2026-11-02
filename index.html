@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pickup Tracker | Contract Representative Portal</title>
+<link rel="icon" type="image/svg+xml" href="./assets/pin.svg">
+<style>
+:root{color-scheme:light;--navy:#193854;--muted:#62758b}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;background:radial-gradient(circle at 50% 12%,#cfe4fc,transparent 40%),linear-gradient(#f3f7fc,#eaf0f7);color:#233950;padding:24px}.card{width:min(100%,460px);background:#fff;padding:33px 36px;border-radius:22px;box-shadow:0 16px 50px #173b5e22;text-align:center;border:1px solid #e0e7f2}.badge{font-size:10px;font-weight:850;letter-spacing:.1em;border-radius:99px;background:#fff3d6;color:#855c00;padding:6px 12px;display:inline-block}.pin{width:108px;height:108px;margin:20px auto 14px;display:block;animation:pulse 2s ease-in-out infinite;filter:drop-shadow(0 8px 11px #a3bbd4)}@keyframes pulse{50%{transform:scale(1.055)}}h1{font-size:27px;margin:0;letter-spacing:-.8px}h2{margin:3px 0 20px;font-size:14px;font-weight:500;color:#637892}p{line-height:1.55;color:var(--muted)}#google-sign-in{display:flex;justify-content:center;margin:23px 0 10px;min-height:45px}.privacy{margin-top:28px;padding:16px;background:#f6f9fc;border:1px solid #e4eaf2;border-radius:10px;text-align:left;font-size:12px;line-height:1.5}.privacy b{color:#294764}.privacy p{font-size:12px;margin:4px 0 0}.status{font-size:12px;color:#475569;min-height:18px}.footer{margin:18px 0 0;font-size:11px;color:#7b8b9b}a{color:#2861a6}
+</style>
+<script src="./config.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+<main class="card">
+  <div class="badge">PICKUP TRACKER — DEVELOPMENT</div>
+  <img class="pin" src="./assets/pin.svg" alt="Pickup Tracker location pin logo">
+  <h1>Pickup Tracker</h1><h2>Convention Contract Representative Portal</h2>
+  <p>Sign in with the Google account approved for your volunteer assignment.</p>
+  <div id="google-sign-in" aria-label="Sign in with Google"></div>
+  <p id="status" class="status" role="status" aria-live="polite"></p>
+  <div class="privacy"><b>🔒 Private and simple sign-in</b><p>Google verifies your identity. We use your verified email address to check authorized Pickup Tracker volunteers. This sign-in does <b>not</b> give us access to your Gmail messages or personal Google Drive files.</p></div>
+  <p class="footer">Need access? Contact the Pickup Tracker administrator. <a href="#" id="different-account">Use another Google account</a></p>
+</main>
+<form id="handoff" method="POST" style="display:none"><input type="hidden" name="credential" id="credential"><input type="hidden" name="challenge" id="challenge"></form>
+<script>
+'use strict';
+const cfg=window.CPT_PUBLIC_CONFIG||{};
+const stat=document.getElementById('status');
+const handoff=document.getElementById('handoff');
+let issuedChallenge='';
+function onGoogleCredential(response){
+  if(!issuedChallenge||!response||typeof response.credential!=='string'){stat.textContent='Google did not provide a valid sign-in credential.';return;}
+  // Normal browser form POST to Apps Script: no CORS fetch, no query-string tokens.
+  stat.textContent='Checking your authorized volunteer access…';
+  document.getElementById('credential').value=response.credential;
+  document.getElementById('challenge').value=issuedChallenge;
+  handoff.action=cfg.appsScriptExec;
+  handoff.submit();
+}
+function setup(){
+  if(!String(cfg.googleClientId||'').endsWith('.apps.googleusercontent.com')||String(cfg.googleClientId).startsWith('REPLACE_')){
+    stat.textContent='Administrator: configure the Google OAuth Web Client ID in config.js.';return;
+  }
+  if(!String(cfg.appsScriptExec||'').startsWith('https://script.google.com/macros/s/')){stat.textContent='Administrator: missing Apps Script deployment URL.';return;}
+  if(!window.google?.accounts?.id){stat.textContent='Google sign-in did not load. Please allow Google accounts scripts and refresh.';return;}
+  requestChallenge();
+
+  document.getElementById('different-account').addEventListener('click',e=>{
+    e.preventDefault();google.accounts.id.disableAutoSelect();window.location.reload();
+  });
+}
+window.cptReceiveChallenge=function(response){
+  if(!response||!response.ok||!/^[a-f0-9-]{36}$/.test(response.challenge||'')){
+    stat.textContent=(response&&response.message)||'Unable to prepare a secure sign-in challenge.';return;
+  }
+  issuedChallenge=response.challenge;
+  google.accounts.id.initialize({client_id:cfg.googleClientId,callback:onGoogleCredential,auto_select:false,ux_mode:'popup',nonce:issuedChallenge});
+  google.accounts.id.renderButton(document.getElementById('google-sign-in'),{theme:'outline',size:'large',shape:'pill',width:280,text:'signin_with'});
+  stat.textContent='Ready — select your registered Google account.';
+};
+function requestChallenge(){
+  issuedChallenge='';stat.textContent='Preparing a secure Google account challenge…';
+  const script=document.createElement('script');
+  script.src=cfg.appsScriptExec+'?mode=challenge&t='+Date.now();
+  script.onerror=()=>stat.textContent='Could not contact the CPT identity receiver. Check the deployment access setting.';
+  document.head.appendChild(script);
+}
+window.addEventListener('load',setup);
+</script>
+</body></html>
